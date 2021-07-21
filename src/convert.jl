@@ -158,6 +158,23 @@ function trixi2vtk(filename::AbstractString...;
           @timeit label vtk_nodedata[label] = @views interpolated_data[:, variable_id]
         end
 
+        node_coordinates = calc_node_coordinates(mesh, n_visnodes)
+        vtk_points, _ = calc_vtk_points_cells(node_coordinates)
+
+        v_spherical = similar(vtk_points)
+        for i in axes(vtk_points, 2)
+          x = view(vtk_points, :, i)
+          v = view(interpolated_data, i, 2:4)
+
+          lambda, phi, r = cart_to_sphere(x)
+
+          v_spherical[:, i] .= VelCartToSphere(v, lambda, phi)
+        end
+
+        vtk_nodedata["v_lambda"] = @views v_spherical[1, :]
+        vtk_nodedata["v_phi"] = @views v_spherical[2, :]
+        vtk_nodedata["v_r"] = @views v_spherical[3, :]
+
         if save_celldata
           # Add element variables
           for (label, variable) in element_variables
@@ -217,6 +234,35 @@ function trixi2vtk(filename::AbstractString...;
   verbose && println("| done.\n")
   print_timer()
   println()
+end
+
+function cart_to_sphere(x)
+  r = sqrt(sum(x.^2))
+  lambda = atan(x[2], x[1])
+  if lambda < 0
+    lambda += 2 * pi
+  end
+  phi = asin(x[3] / r)
+
+  return lambda, phi, r
+end
+
+function VelCartToSphere(v, lam, phi)
+  r11 =          -sin(lam)
+  r21 = -sin(phi)*cos(lam)
+  r31 =  cos(phi)*cos(lam)
+  r12 =           cos(lam)
+  r22 = -sin(phi)*sin(lam)
+  r32 =  cos(phi)*sin(lam)
+  r13 =           0.0
+  r23 =  cos(phi)
+  r33 =  sin(phi)
+
+  v_lam = r11*v[1] + r12*v[2] + r13*v[3]
+  v_phi = r21*v[1] + r22*v[2] + r23*v[3]
+  v_r = r31*v[1] + r32*v[2] + r33*v[3]
+
+  return v_lam, v_phi, v_r
 end
 
 
