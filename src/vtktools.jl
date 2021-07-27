@@ -53,8 +53,10 @@ function build_vtk_grids(::Val{:vti}, mesh, n_visnodes, verbose,
   ndims_ = size(coordinates, 1)
 
   # Prepare VTK points and cells for celldata file
+  println("build_vtk_grids: vor calc_vtk_points_cells")
   @timeit "prepare VTK cells" vtk_celldata_points, vtk_celldata_cells = calc_vtk_points_cells(
       Val(ndims_), coordinates, levels, center_level_0, length_level_0, 1)
+  println("build_vtk_grids: nach calc_vtk_points_cells")
 
   # Determine output file names
   base, _ = splitext(splitdir(filename)[2])
@@ -451,7 +453,6 @@ function calc_vtk_points_cells(node_coordinates::AbstractArray{<:Any,4})
   return vtk_points, vtk_cells
 end
 
-
 # Convert coordinates and level information to a list of points and VTK cells for `StructuredMesh` (3D version)
 function calc_vtk_points_cells(node_coordinates::AbstractArray{<:Any,5})
   n_elements = size(node_coordinates, 5)
@@ -460,8 +461,41 @@ function calc_vtk_points_cells(node_coordinates::AbstractArray{<:Any,5})
   # Linear indices to access points by node indices and element id
   linear_indices = LinearIndices(size_[2:end])
 
+  # Transform coordinates
+  node_tr_coordinates=copy(node_coordinates)
+  for element in 1:n_elements
+    for k in 1:size_[4]
+      for j in 1:size_[3]
+        for i in 1:size_[2]
+          x = node_coordinates[1,i,j,k,element]
+          y = node_coordinates[2,i,j,k,element]
+          z = node_coordinates[3,i,j,k,element]
+          lon, lat, r = cart_to_sphere(node_coordinates[:,i,j,k,element])
+          r = 1.e-4*max(r-6371220.0,0.0)
+          node_tr_coordinates[1,i,j,k,element] = lon
+          node_tr_coordinates[2,i,j,k,element] = lat
+          node_tr_coordinates[3,i,j,k,element] = r
+        end 
+      end 
+    end 
+    lonMin=minimum(node_tr_coordinates[1,:,:,:,element])
+    lonMax=maximum(node_tr_coordinates[1,:,:,:,element])
+    if abs(lonMin-lonMax)>4*atan(1.)
+      for k in 1:size_[4]
+        for j in 1:size_[3]
+          for i in 1:size_[2]
+            if node_tr_coordinates[1,i,j,k,element]<4.0*atan(1.)
+              node_tr_coordinates[1,i,j,k,element]=node_tr_coordinates[1,i,j,k,element]+8.0*atan(1.)
+            end
+          end 
+        end 
+      end 
+    end     
+  end    
+
   # Use lagrange nodes as VTK points
-  vtk_points = reshape(node_coordinates, (3, n_points))
+  vtk_points = reshape(node_tr_coordinates, (3, n_points))
+# vtk_points = reshape(node_coordinates, (3, n_points))
   vtk_cells = Vector{MeshCell}(undef, n_elements)
 
   # Create cell for each element

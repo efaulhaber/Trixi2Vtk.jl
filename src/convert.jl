@@ -174,7 +174,7 @@ function trixi2vtk(filename::AbstractString...;
         vtk_nodedata["v_lambda"] = @views v_spherical[1, :]
         vtk_nodedata["v_phi"] = @views v_spherical[2, :]
         vtk_nodedata["v_r"] = @views v_spherical[3, :]
-
+        
         if save_celldata
           # Add element variables
           for (label, variable) in element_variables
