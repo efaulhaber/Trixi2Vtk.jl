@@ -163,7 +163,8 @@ function trixi2vtk(filename::AbstractString...;
 
         v_spherical = similar(vtk_points)
         for i in axes(vtk_points, 2)
-          x = view(vtk_points, :, i)
+          vtk_points_old = reshape(node_coordinates, (3, size(vtk_points, 2)))
+          x = view(vtk_points_old, :, i)
           v = view(interpolated_data, i, 2:4)
 
           lambda, phi, r = cart_to_sphere(x)
@@ -174,7 +175,7 @@ function trixi2vtk(filename::AbstractString...;
         vtk_nodedata["v_lambda"] = @views v_spherical[1, :]
         vtk_nodedata["v_phi"] = @views v_spherical[2, :]
         vtk_nodedata["v_r"] = @views v_spherical[3, :]
-        
+
         if save_celldata
           # Add element variables
           for (label, variable) in element_variables
