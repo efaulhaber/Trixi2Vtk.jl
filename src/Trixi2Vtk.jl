@@ -5,6 +5,7 @@ using Glob: glob
 using HDF5: h5open, attributes, haskey
 using ProgressMeter: @showprogress, Progress, next!
 using StaticArrays: SVector
+using Statistics: median
 using TimerOutputs
 using Trixi: Trixi, transfinite_mapping, coordinates2mapping, polynomial_interpolation_matrix,
              gauss_lobatto_nodes_weights, TreeMesh, StructuredMesh, UnstructuredMesh2D, P4estMesh

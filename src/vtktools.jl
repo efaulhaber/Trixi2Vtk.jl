@@ -464,38 +464,54 @@ function calc_vtk_points_cells(node_coordinates::AbstractArray{<:Any,5})
   # Transform coordinates
   node_tr_coordinates=copy(node_coordinates)
   for element in 1:n_elements
-    for k in 1:size_[4]
-      for j in 1:size_[3]
-        for i in 1:size_[2]
-          x = node_coordinates[1,i,j,k,element]
-          y = node_coordinates[2,i,j,k,element]
-          z = node_coordinates[3,i,j,k,element]
-          lon, lat, r = cart_to_sphere(node_coordinates[:,i,j,k,element])
-          r = 1.e-4*max(r-6371220.0,0.0)
-          node_tr_coordinates[1,i,j,k,element] = lon
-          node_tr_coordinates[2,i,j,k,element] = lat
-          node_tr_coordinates[3,i,j,k,element] = r
-        end 
-      end 
-    end 
-    lonMin=minimum(node_tr_coordinates[1,:,:,:,element])
-    lonMax=maximum(node_tr_coordinates[1,:,:,:,element])
-    if abs(lonMin-lonMax)>4*atan(1.)
-      for k in 1:size_[4]
-        for j in 1:size_[3]
-          for i in 1:size_[2]
-            if node_tr_coordinates[1,i,j,k,element]<4.0*atan(1.)
-              node_tr_coordinates[1,i,j,k,element]=node_tr_coordinates[1,i,j,k,element]+8.0*atan(1.)
+    for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+      x = node_coordinates[1,i,j,k,element]
+      y = node_coordinates[2,i,j,k,element]
+      z = node_coordinates[3,i,j,k,element]
+      lon, lat, r = cart_to_sphere((x, y, z))
+      r = 1.e-4 * max(r - 6371220, 0.0)
+      node_tr_coordinates[1,i,j,k,element] = lon
+      node_tr_coordinates[2,i,j,k,element] = lat
+      node_tr_coordinates[3,i,j,k,element] = r
+    end
+
+    @views lonMin = minimum(node_tr_coordinates[1,:,:,:,element])
+    @views lonMax = maximum(node_tr_coordinates[1,:,:,:,element])
+    if abs(lonMin - lonMax) > pi
+      # Use median of longitudes of the element nodes at singularities (north and south pole)
+      # to prevent elements that are stretched too far in x-direction
+      for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+        if abs(node_tr_coordinates[2, i, j, k, element]) ≈ pi / 2
+          node_tr_coordinates[1, i, j, k, element] = median(node_tr_coordinates[1, :, :, :, element])
+        end
+      end
+
+      lonMin=minimum(node_tr_coordinates[1,:,:,:,element])
+      lonMax=maximum(node_tr_coordinates[1,:,:,:,element])
+      if abs(lonMin-lonMax) > pi
+        smaller = count(<(pi), node_tr_coordinates[1,:,:,:,element])
+        greater = count(>=(pi), node_tr_coordinates[1,:,:,:,element])
+
+        if greater >= smaller
+          for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+            if node_tr_coordinates[1,i,j,k,element] < pi
+              node_tr_coordinates[1,i,j,k,element] += 2 * pi
             end
-          end 
-        end 
-      end 
-    end     
-  end    
+          end
+        else
+          for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+            if node_tr_coordinates[1,i,j,k,element] >= pi
+              node_tr_coordinates[1,i,j,k,element] -= 2 * pi
+            end
+          end
+        end
+      end
+    end
+  end
 
   # Use lagrange nodes as VTK points
   vtk_points = reshape(node_tr_coordinates, (3, n_points))
-# vtk_points = reshape(node_coordinates, (3, n_points))
+  # vtk_points = reshape(node_coordinates, (3, n_points))
   vtk_cells = Vector{MeshCell}(undef, n_elements)
 
   # Create cell for each element
