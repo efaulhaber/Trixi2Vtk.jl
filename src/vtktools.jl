@@ -482,7 +482,7 @@ function calc_vtk_points_cells(node_coordinates::AbstractArray{<:Any,5})
       # to prevent elements that are stretched too far in x-direction
       for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
         if abs(node_tr_coordinates[2, i, j, k, element]) ≈ pi / 2
-          node_tr_coordinates[1, i, j, k, element] = median(node_tr_coordinates[1, :, :, :, element])
+          @views node_tr_coordinates[1, i, j, k, element] = median(node_tr_coordinates[1, :, :, :, element])
         end
       end
 
@@ -506,6 +506,20 @@ function calc_vtk_points_cells(node_coordinates::AbstractArray{<:Any,5})
           end
         end
       end
+    end
+  end
+
+  # Transform coordinates
+  for element in 1:n_elements
+    for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+      x = node_coordinates[1,i,j,k,element]
+      y = node_coordinates[2,i,j,k,element]
+      z = node_coordinates[3,i,j,k,element]
+
+      r = sqrt(x^2 + y^2 + z^2)
+      r2 = r - 6371220 + 63712
+
+      node_coordinates[:,i,j,k,element] .= SVector(x, y, z) / r * r2
     end
   end
 
