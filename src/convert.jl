@@ -113,6 +113,55 @@ function trixi2vtk(filename::AbstractString...;
       save_celldata = isa(mesh, TreeMesh)
     end
 
+    # Transform tree node coordinates
+    tree_node_coordinates = mesh.tree_node_coordinates
+    size_ = size(tree_node_coordinates)
+    for element in axes(tree_node_coordinates, 5)
+      for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+        x = tree_node_coordinates[1,i,j,k,element]
+        y = tree_node_coordinates[2,i,j,k,element]
+        z = tree_node_coordinates[3,i,j,k,element]
+        lon, lat, r = cart_to_sphere((x, y, z))
+        r = 1.e-4 * (r - 6.371229e6)
+        tree_node_coordinates[1,i,j,k,element] = lon
+        tree_node_coordinates[2,i,j,k,element] = lat
+        tree_node_coordinates[3,i,j,k,element] = r
+      end
+
+      @views lonMin = minimum(tree_node_coordinates[1,:,:,:,element])
+      @views lonMax = maximum(tree_node_coordinates[1,:,:,:,element])
+      if abs(lonMin - lonMax) > pi
+        # Use median of longitudes of the element nodes at singularities (north and south pole)
+        # to prevent elements that are stretched too far in x-direction
+        for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+          if abs(tree_node_coordinates[2, i, j, k, element]) ≈ pi / 2
+            @views tree_node_coordinates[1, i, j, k, element] = median(tree_node_coordinates[1, :, :, :, element])
+          end
+        end
+
+        lonMin=minimum(tree_node_coordinates[1,:,:,:,element])
+        lonMax=maximum(tree_node_coordinates[1,:,:,:,element])
+        if abs(lonMin-lonMax) > pi
+          smaller = count(<(pi), tree_node_coordinates[1,:,:,:,element])
+          greater = count(>=(pi), tree_node_coordinates[1,:,:,:,element])
+
+          if greater >= smaller
+            for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+              if tree_node_coordinates[1,i,j,k,element] < pi
+                tree_node_coordinates[1,i,j,k,element] += 2 * pi
+              end
+            end
+          else
+            for k in 1:size_[4], j in 1:size_[3], i in 1:size_[2]
+              if tree_node_coordinates[1,i,j,k,element] >= pi
+                tree_node_coordinates[1,i,j,k,element] -= 2 * pi
+              end
+            end
+          end
+        end
+      end
+    end
+
     # Read data only if it is a data file
     if is_datafile
       verbose && println("| Reading data file...")
@@ -167,7 +216,7 @@ function trixi2vtk(filename::AbstractString...;
           x = view(vtk_points_old, :, i)
           v = view(interpolated_data, i, 2:4)
 
-          lambda, phi, r = cart_to_sphere(x)
+          lambda, phi, r = x
 
           v_spherical[:, i] .= VelCartToSphere(v, lambda, phi)
         end
